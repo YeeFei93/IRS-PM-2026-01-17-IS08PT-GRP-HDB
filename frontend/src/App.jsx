@@ -5,11 +5,12 @@ import Welcome from './components/Welcome';
 import Loading from './components/Loading';
 import Empty from './components/Empty';
 import ResultsPane from './components/ResultsPane';
-import MapView from './components/MapView';
-import TrendsView from './components/TrendsView';
+import MapView from './pages//MapView';
+import TrendsView from './pages/TrendsView';
 import { REGIONS, ALL_TOWNS, API_BASE } from './constants';
 import { calcGrants, loanCapacity, checkEligibility, analyseRecords, computeScore } from './engine';
 import { fetchTown, checkBackendHealth, runSearchBackend, normaliseBackendRec } from './api';
+import MainView from './pages/MainView';
 
 const INITIAL_FORM = {
   cit: 'SC_SC',
@@ -159,14 +160,7 @@ export default function App() {
     return () => { if (loadStepRef.current) clearInterval(loadStepRef.current); };
   }, []);
 
-  const onCardClick = useCallback((town) => {
-    setHighlightedTown(town);
-  }, []);
-
-  const onJumpMap = useCallback((town) => {
-    setActiveTab('map');
-    setHighlightedTown(town);
-  }, []);
+  
 
   return (
     <div className="min-h-screen">
@@ -184,26 +178,18 @@ export default function App() {
         <main className="flex flex-col overflow-y-auto h-[calc(100vh-56px)]">
           {/* Results Tab */}
           {activeTab === 'results' && (
-            <>
-              {phase === 'welcome' && <Welcome />}
-              {phase === 'loading' && <Loading mainText={loadMainText} stepText={loadStepText} />}
-              {phase === 'empty' && <Empty />}
-              {phase === 'results' && (
-                <ResultsPane
-                  recs={recs}
-                  grants={derived.grants}
-                  effective={derived.effective}
-                  cash={formState.cash}
-                  cpf={formState.cpf}
-                  rawCount={rawCount}
-                  latestMonth={latestMonth}
-                  mustAmenities={formState.mustAmenities}
-                  highlightedTown={highlightedTown}
-                  onCardClick={onCardClick}
-                  onJumpMap={onJumpMap}
-                />
-              )}
-            </>
+            <MainView phase={phase}
+              loadMainText={loadMainText}
+              loadStepText={loadStepText} 
+              recs={recs}
+              derived={derived}
+              formState={formState}
+              rawCount={rawCount}
+              latestMonth={latestMonth}
+              highlightedTown={highlightedTown}
+              setHighlightedTown={setHighlightedTown}
+            
+            />
           )}
 
           {/* Map Tab */}
