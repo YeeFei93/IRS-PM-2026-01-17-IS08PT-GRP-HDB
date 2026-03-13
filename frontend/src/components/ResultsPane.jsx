@@ -20,6 +20,9 @@ export default function ResultsPane({
   else if (sortKey === 'price_desc') sorted.sort((a, b) => b.pd.median - a.pd.median);
   else if (sortKey === 'psm') sorted.sort((a, b) => a.pd.psm - b.pd.psm);
 
+  // Detect active criteria count from first rec
+  const activeCount = recs[0]?.sc?.active?.length || 0;
+
   let staleWarning = null;
   if (latestMonth) {
     const [y, m] = latestMonth.split('-').map(Number);
@@ -58,6 +61,7 @@ export default function ResultsPane({
             <div className="font-serif text-[1.25rem] text-white">Top {recs.length} Recommendations</div>
             <div className="text-[0.74rem] text-muted mt-0.5">
               {rawCount.toLocaleString()} transactions · {latestMonth || '—'} · data.gov.sg
+              {activeCount > 0 && ` · MCDM ${activeCount} criteria + serendipity`}
             </div>
           </div>
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[rgba(22,160,133,0.1)] border border-[rgba(22,160,133,0.25)] text-teal text-[0.65rem] font-mono">
@@ -75,14 +79,14 @@ export default function ResultsPane({
           {grants.ehg > 0 && <>
             <div className="w-px h-8 bg-dk4" />
             <div className="text-center">
-              <div className="text-[0.62rem] text-muted uppercase tracking-[1px]">EHG Grant</div>
+              <div className="text-[0.62rem] text-muted uppercase tracking-[1px]">EHG Grant{grants.ehgScheme ? ` (${grants.ehgScheme})` : ''}</div>
               <div className="font-mono text-[0.9rem] text-green font-semibold">${grants.ehg.toLocaleString()}</div>
             </div>
           </>}
           {grants.cpfG > 0 && <>
             <div className="w-px h-8 bg-dk4" />
             <div className="text-center">
-              <div className="text-[0.62rem] text-muted uppercase tracking-[1px]">CPF Grant</div>
+              <div className="text-[0.62rem] text-muted uppercase tracking-[1px]">CPF Grant{grants.cpfScheme ? ` (${grants.cpfScheme})` : ''}</div>
               <div className="font-mono text-[0.9rem] text-green font-semibold">${grants.cpfG.toLocaleString()}</div>
             </div>
           </>}

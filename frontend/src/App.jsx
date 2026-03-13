@@ -7,9 +7,9 @@ import Empty from './components/Empty';
 import ResultsPane from './components/ResultsPane';
 import MapView from './components/MapView';
 import TrendsView from './components/TrendsView';
-import { REGIONS, ALL_TOWNS } from './constants';
+import { REGIONS, ALL_TOWNS, API_BASE } from './constants';
 import { calcGrants, loanCapacity, checkEligibility, analyseRecords, computeScore } from './engine';
-import { fetchTown } from './api';
+import { fetchTown, checkBackendHealth, runSearchBackend, normaliseBackendRec } from './api';
 
 const INITIAL_FORM = {
   cit: 'SC_SC',
@@ -47,9 +47,9 @@ export default function App() {
 
   // Derived eligibility/grant/budget calculations
   const derived = useMemo(() => {
-    const { cit, age, inc, ftimer, prox, ftype, cash, cpf, loan } = formState;
-    const eligibility = checkEligibility(cit, inc, age);
-    const grants = calcGrants(cit, inc, ftype, ftimer, prox);
+    const { cit, age, inc, ftimer, prox, ftype, cash, cpf, loan, marital } = formState;
+    const eligibility = checkEligibility(cit, inc, age, marital);
+    const grants = calcGrants(cit, inc, ftype, ftimer, prox, marital);
     const loanAmt = loanCapacity(loan);
     const effective = cash + cpf + grants.total + Math.min(loanAmt, 750000);
     return { eligibility, grants, effective };
@@ -79,11 +79,37 @@ export default function App() {
       setLoadStepText(steps[Math.min(si, steps.length - 1)]);
     }, 900);
 
-    const { selRegions, ftype } = formState;
+    const { selRegions, ftype, lease: minLease, age: buyerAge } = formState;
     const towns = selRegions.length
       ? selRegions.flatMap(r => REGIONS[r] || [])
       : ALL_TOWNS;
 
+    // ── Try backend first ──
+    let backendOk = false;
+    if (API_BASE) {
+      try {
+        backendOk = await checkBackendHealth();
+      } catch { backendOk = false; }
+    }
+
+    if (backendOk) {
+      setLoadMainText('Sending request to recommendation engine…');
+      try {
+        const payload = { ...formState, effective: derived.effective, grants: derived.grants };
+        const res = await runSearchBackend(payload);
+        clearInterval(loadStepRef.current);
+        const topRecs = (res.recommendations || []).map(normaliseBackendRec).slice(0, 10);
+        setRawCount(res.raw_count || topRecs.length);
+        setLatestMonth(res.latest_month || null);
+        setRecs(topRecs);
+        setPhase(topRecs.length ? 'results' : 'empty');
+        return;
+      } catch (e) {
+        console.warn('Backend search failed, falling back to data.gov.sg', e);
+      }
+    }
+
+    // ── Fallback: data.gov.sg direct ──
     const d = new Date();
     d.setMonth(d.getMonth() - 14);
     const cutoff = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -112,7 +138,7 @@ export default function App() {
       const pd = analyseRecords(rawRecords, town, ftype);
       if (!pd) continue;
       if (pd.p25 > effective * 1.18) continue;
-      const sc = computeScore(town, pd, effective, mustAmenities, mrtMax, selRegions);
+      const sc = computeScore(town, pd, effective, mustAmenities, mrtMax, selRegions, ftype, minLease, buyerAge);
       newRecs.push({ town, ftype: ftype === 'any' ? '4 ROOM' : ftype, pd, sc, grants, effective });
     }
 

@@ -1,5 +1,19 @@
 export const DATASET = 'd_8b84c4ee58e3cfc0ece0d773c8ca6abc';
 
+// Backend API base URL — set to your FastAPI server when running locally
+// Set to empty string '' to use direct data.gov.sg fallback
+export const API_BASE = 'http://localhost:8000';
+
+// Amenity must-have threshold definitions
+export const AMENITY_THRESHOLDS = {
+  mrt:      { maxMins: 6,  label: '≤500m' },
+  hawker:   { maxMins: 12, label: '≤1km' },
+  school:   { maxMins: 12, label: '≤1km' },
+  park:     { maxMins: 12, label: '≤1km' },
+  mall:     { maxMins: 18, label: '≤1.5km' },
+  hospital: { maxMins: 36, label: '≤3km' },
+};
+
 export const REGIONS = {
   north: ['WOODLANDS', 'SEMBAWANG', 'YISHUN', 'ANG MO KIO', 'BISHAN'],
   northeast: ['SENGKANG', 'PUNGGOL', 'HOUGANG', 'SERANGOON', 'BUANGKOK'],

@@ -1,4 +1,4 @@
-import { AMENITIES } from '../constants';
+import { AMENITIES, AMENITY_THRESHOLDS } from '../constants';
 import { whyText } from '../engine';
 
 function ScoreRow({ icon, label, pts, max, desc }) {
@@ -26,23 +26,25 @@ function ScoreRow({ icon, label, pts, max, desc }) {
   );
 }
 
-function AmenityRow({ icon, label, d, isMust }) {
+function AmenityRow({ icon, label, d, isMust, amenKey }) {
   if (!d) return null;
-  const ptsPositive = d.pts > 0;
+  const thresh = AMENITY_THRESHOLDS[amenKey];
+  const withinThreshold = d.ok ?? (d.pts > 0);
   const ptsCls = d.pts >= 5 ? 'text-green' : d.pts > 0 ? 'text-gold' : 'text-orange';
   const detail = d.name
     ? (d.mins ? `${d.name} — ${d.mins} min walk` : d.name)
-    : (ptsPositive ? 'Present nearby' : 'Not confirmed nearby');
+    : (withinThreshold ? 'Present nearby' : 'Not confirmed nearby');
   return (
     <div className="flex items-center px-3 py-1 gap-2.5 border-b border-dk4 last:border-b-0">
       <div className="text-xs shrink-0 w-5 text-center">{icon}</div>
       <div className="flex-1">
         <div className="text-[0.7rem] text-light font-medium">
           {label}
+          {thresh && <span className="text-[0.6rem] text-muted ml-1">({thresh.label})</span>}
           {isMust && (
-            ptsPositive
-              ? <span className="ml-1 inline-flex items-center gap-1 px-1.5 rounded text-[0.62rem] font-mono bg-[rgba(39,174,96,0.12)] text-[#55d98d]">✓ must-have met</span>
-              : <span className="ml-1 inline-flex items-center gap-1 px-1.5 rounded text-[0.62rem] font-mono bg-[rgba(192,57,43,0.12)] text-[#ff8080]">✗ must-have missing −5pts</span>
+            withinThreshold
+              ? <span className="ml-1 inline-flex items-center gap-1 px-1.5 rounded text-[0.62rem] font-mono bg-[rgba(39,174,96,0.12)] text-[#55d98d]">✓ within threshold</span>
+              : <span className="ml-1 inline-flex items-center gap-1 px-1.5 rounded text-[0.62rem] font-mono bg-[rgba(192,57,43,0.12)] text-[#ff8080]">✗ exceeds threshold</span>
           )}
         </div>
         <div className="text-[0.67rem] text-muted">{detail}</div>
@@ -66,23 +68,37 @@ export default function ResultCard({ rec, index, mustAmenities, isHighlighted, o
     : pd.conf === 'medium' ? 'text-orange bg-[rgba(230,126,34,0.1)]'
       : 'text-[#ff8080] bg-[rgba(192,57,43,0.1)]';
 
-  const scoreRows = [
-    { icon: '💰', label: 'Budget Fit', pts: sc.budget.pts, max: sc.budget.max, desc: sc.budget.desc },
-    { icon: '🚇', label: 'Transport Access', pts: sc.transport.pts, max: sc.transport.max, desc: sc.transport.desc },
-    { icon: '🗺️', label: 'Region Match', pts: sc.region.pts, max: sc.region.max, desc: sc.region.desc },
-    { icon: '🏠', label: 'Flat Attributes', pts: sc.flat.pts, max: sc.flat.max, desc: sc.flat.desc },
-  ];
+  const CRIT_META = {
+    budget:  { icon: '💰', label: 'Budget Fit',      data: sc.budget },
+    flat:    { icon: '🏠', label: 'Flat Attributes',  data: sc.flat },
+    region:  { icon: '🗺️', label: 'Region Match',     data: sc.region },
+    lease:   { icon: '📅', label: 'Lease Fit',        data: sc.lease },
+    mrt:     { icon: '🚇', label: 'Transport Access', data: sc.transport },
+    amenity: { icon: '📍', label: 'Amenity Score',    data: sc.amenity },
+  };
+
+  const activeCriteria = sc.active && sc.active.length ? sc.active : ['budget', 'flat', 'region', 'mrt', 'amenity'];
+  const scoreRows = activeCriteria
+    .filter(c => CRIT_META[c] && c !== 'amenity')  // amenity has its own section
+    .map(c => {
+      const m = CRIT_META[c];
+      return {
+        icon: m.icon, label: m.label,
+        pts: m.data?.pts ?? 0, max: m.data?.max ?? sc.weight ?? 20,
+        desc: m.data?.desc || '',
+      };
+    });
 
   const amenItems = [
-    { key: 'mrt', icon: '🚇', label: 'MRT Station', d: sc.amenity.detail.mrt },
-    { key: 'hawker', icon: '🍜', label: 'Hawker Centre', d: sc.amenity.detail.hawker },
-    { key: 'park', icon: '🌳', label: 'Park', d: sc.amenity.detail.park },
-    { key: 'school', icon: '🏫', label: 'Primary School', d: sc.amenity.detail.school },
-    { key: 'mall', icon: '🛍️', label: 'Shopping Mall', d: sc.amenity.detail.mall },
-    { key: 'clinic', icon: '🏥', label: 'Clinic', d: sc.amenity.detail.clinic },
+    { key: 'mrt', icon: '🚇', label: 'MRT Station', d: sc.amenity?.detail?.mrt },
+    { key: 'hawker', icon: '🍜', label: 'Hawker Centre', d: sc.amenity?.detail?.hawker },
+    { key: 'park', icon: '🌳', label: 'Park', d: sc.amenity?.detail?.park },
+    { key: 'school', icon: '🏫', label: 'Primary School', d: sc.amenity?.detail?.school },
+    { key: 'hospital', icon: '🏥', label: 'Hospital', d: sc.amenity?.detail?.hospital },
   ];
 
-  const amenPtsCls = sc.amenity.pts >= 20 ? 'text-green' : sc.amenity.pts >= 12 ? 'text-gold' : 'text-orange';
+  const amenMax = sc.amenity?.max || sc.weight || 20;
+  const amenPtsCls = (sc.amenity?.pts || 0) >= amenMax * 0.75 ? 'text-green' : (sc.amenity?.pts || 0) >= amenMax * 0.5 ? 'text-gold' : 'text-orange';
 
   return (
     <div
@@ -112,17 +128,22 @@ export default function ResultCard({ rec, index, mustAmenities, isHighlighted, o
           <div className="h-full rounded-sm bg-gradient-to-r from-red to-gold bar-fill-transition" style={{ width: `${sc.total}%` }} />
         </div>
         <div className="flex gap-1 mt-1.5 flex-wrap">
-          {[
-            ['Budget', sc.budget.pts, 20],
-            ['Amenities', sc.amenity.pts, 30],
-            ['Transport', sc.transport.pts, 20],
-            ['Region', sc.region.pts, 15],
-            ['Flat', sc.flat.pts, 15],
-          ].map(([label, pts, max]) => (
-            <div key={label} className="text-[0.62rem] px-1.5 py-0.5 rounded bg-dk3 text-muted">
-              {label} <span className="text-light">{pts}/{max}</span>
+          {activeCriteria.map(c => {
+            const m = CRIT_META[c];
+            if (!m) return null;
+            const pts = m.data?.pts ?? 0;
+            const max = m.data?.max ?? sc.weight ?? 20;
+            return (
+              <div key={c} className="text-[0.62rem] px-1.5 py-0.5 rounded bg-dk3 text-muted">
+                {m.label} <span className="text-light">{pts}/{max}</span>
+              </div>
+            );
+          })}
+          {sc.serendipity && (
+            <div className="text-[0.62rem] px-1.5 py-0.5 rounded bg-dk3 text-muted">
+              ✨ Serendipity <span className="text-light">{sc.serendipity.pts}/20</span>
             </div>
-          ))}
+          )}
         </div>
       </div>
 
@@ -172,24 +193,39 @@ export default function ResultCard({ rec, index, mustAmenities, isHighlighted, o
         <div className="mt-3 bg-dk3 rounded-[7px] border border-dk4 overflow-hidden">
           <div className="px-3 py-2 pb-1.5 text-[0.68rem] text-muted uppercase tracking-[1px] border-b border-dk4">
             📊 Score Breakdown — {sc.total}/100
+            {sc.label && <span className="ml-2 normal-case tracking-normal text-gold">{sc.label}</span>}
           </div>
           {scoreRows.map(row => <ScoreRow key={row.label} {...row} />)}
+          {/* Serendipity row */}
+          {sc.serendipity && sc.serendipity.pts > 0 && (
+            <div className="flex items-center px-3 py-1.5 gap-2.5 border-b border-dk4">
+              <div className="text-sm shrink-0 w-5 text-center">✨</div>
+              <div className="flex-1">
+                <div className="text-[0.74rem] text-light font-medium">Serendipity Bonus</div>
+                <div className="text-[0.67rem] text-muted">Bonus from {sc.inactive?.length || 0} unconfigured criteria — rewards hidden strengths</div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="font-mono text-[0.82rem] font-semibold text-gold">{sc.serendipity.pts}</div>
+                <div className="text-[0.62rem] text-muted">/20</div>
+              </div>
+            </div>
+          )}
           {/* Amenity header row */}
           <div className="flex items-center px-3 py-1.5 gap-2.5 border-b border-dk4">
             <div className="text-sm shrink-0 w-5 text-center">📍</div>
             <div className="flex-1">
               <div className="text-[0.74rem] text-light font-medium">
-                Amenity Score <span className="text-[0.62rem] text-muted font-normal">— {sc.amenity.pts}/30 pts total</span>
+                Amenity Score <span className="text-[0.62rem] text-muted font-normal">— {sc.amenity?.pts || 0}/{amenMax} pts total</span>
               </div>
               <div className="text-[0.67rem] text-muted">Breakdown of all nearby amenities and their contribution</div>
             </div>
             <div className="text-right shrink-0">
-              <div className={`font-mono text-[0.82rem] font-semibold ${amenPtsCls}`}>{sc.amenity.pts}</div>
-              <div className="text-[0.62rem] text-muted">/30</div>
+              <div className={`font-mono text-[0.82rem] font-semibold ${amenPtsCls}`}>{sc.amenity?.pts || 0}</div>
+              <div className="text-[0.62rem] text-muted">/{amenMax}</div>
             </div>
           </div>
           {amenItems.map(ai => (
-            <AmenityRow key={ai.key} icon={ai.icon} label={ai.label} d={ai.d} isMust={mustAmenities.includes(ai.key)} />
+            <AmenityRow key={ai.key} icon={ai.icon} label={ai.label} d={ai.d} isMust={mustAmenities.includes(ai.key)} amenKey={ai.key} />
           ))}
         </div>
 
