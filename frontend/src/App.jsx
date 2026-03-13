@@ -9,7 +9,7 @@ import MapView from './components/MapView';
 import TrendsView from './components/TrendsView';
 import { REGIONS, ALL_TOWNS } from './constants';
 import { calcGrants, loanCapacity, checkEligibility, analyseRecords, computeScore } from './engine';
-import { fetchTown } from './api';
+import { fetchTown, backendRecommend, normaliseBackendRec, backendHealthCheck } from './api';
 
 const INITIAL_FORM = {
   cit: 'SC_SC',
@@ -47,9 +47,9 @@ export default function App() {
 
   // Derived eligibility/grant/budget calculations
   const derived = useMemo(() => {
-    const { cit, age, inc, ftimer, prox, ftype, cash, cpf, loan } = formState;
-    const eligibility = checkEligibility(cit, inc, age);
-    const grants = calcGrants(cit, inc, ftype, ftimer, prox);
+    const { cit, age, inc, ftimer, prox, ftype, cash, cpf, loan, marital } = formState;
+    const eligibility = checkEligibility(cit, inc, age, marital);
+    const grants = calcGrants(cit, inc, ftype, ftimer, prox, marital);
     const loanAmt = loanCapacity(loan);
     const effective = cash + cpf + grants.total + Math.min(loanAmt, 750000);
     return { eligibility, grants, effective };
@@ -63,7 +63,58 @@ export default function App() {
 
     setPhase('loading');
     setActiveTab('results');
+
     const steps = [
+      'Connecting to backend…',
+      'Analysing prices…',
+      'Computing amenity distances…',
+      'Scoring recommendations…',
+      'Ranking results…',
+    ];
+    let si = 0;
+    setLoadMainText(steps[0]);
+    setLoadStepText(steps[0]);
+    loadStepRef.current = setInterval(() => {
+      si++;
+      setLoadStepText(steps[Math.min(si, steps.length - 1)]);
+    }, 900);
+
+    // ── Try backend first ──────────────────────────────────────────────────
+    try {
+      const data = await backendRecommend(formState);
+
+      clearInterval(loadStepRef.current);
+
+      if (!data.eligible) {
+        alert(data.warnings?.join('\n') || 'Not eligible.');
+        setPhase('welcome');
+        return;
+      }
+
+      const topRecs = (data.recommendations || []).map(normaliseBackendRec);
+      const backendGrants = data.grants || {};
+
+      // Override derived grants/effective with backend values
+      const grantsNorm = {
+        ehg: backendGrants.ehg || 0,
+        cpfG: backendGrants.cpf_grant || 0,
+        phg: backendGrants.phg || 0,
+        total: backendGrants.total || 0,
+      };
+
+      setRawCount(topRecs.reduce((sum, r) => sum + (r.pd.n || 0), 0));
+      setLatestMonth(null);
+      setRecs(topRecs);
+      setPhase(topRecs.length ? 'results' : 'empty');
+      return;
+    } catch (backendErr) {
+      console.warn('Backend unavailable, falling back to client-side:', backendErr.message);
+    }
+
+    // ── Fallback: client-side data.gov.sg fetch ────────────────────────────
+    setLoadMainText('Connecting to data.gov.sg…');
+    si = 0;
+    const fallbackSteps = [
       'Connecting to data.gov.sg…',
       'Fetching resale transactions…',
       'Running data quality checks…',
@@ -71,12 +122,11 @@ export default function App() {
       'Computing amenity scores…',
       'Ranking recommendations…',
     ];
-    let si = 0;
-    setLoadMainText('Connecting to data.gov.sg…');
-    setLoadStepText(steps[0]);
+    setLoadStepText(fallbackSteps[0]);
+    clearInterval(loadStepRef.current);
     loadStepRef.current = setInterval(() => {
       si++;
-      setLoadStepText(steps[Math.min(si, steps.length - 1)]);
+      setLoadStepText(fallbackSteps[Math.min(si, fallbackSteps.length - 1)]);
     }, 900);
 
     const { selRegions, ftype } = formState;
@@ -102,7 +152,7 @@ export default function App() {
     clearInterval(loadStepRef.current);
 
     const { effective, grants } = derived;
-    const { mustAmenities, mrtMax } = formState;
+    const { mustAmenities, mrtMax, lease, age } = formState;
 
     const seen = new Set();
     const newRecs = [];
@@ -112,8 +162,8 @@ export default function App() {
       const pd = analyseRecords(rawRecords, town, ftype);
       if (!pd) continue;
       if (pd.p25 > effective * 1.18) continue;
-      const sc = computeScore(town, pd, effective, mustAmenities, mrtMax, selRegions);
-      newRecs.push({ town, ftype: ftype === 'any' ? '4 ROOM' : ftype, pd, sc, grants, effective });
+      const sc = computeScore(town, pd, effective, mustAmenities, mrtMax, selRegions, ftype, lease, age);
+      newRecs.push({ town, ftype: ftype === 'any' ? '4 ROOM' : ftype, pd, sc, grants, effective, failed_must: [] });
     }
 
     newRecs.sort((a, b) => b.sc.total - a.sc.total);
@@ -169,6 +219,8 @@ export default function App() {
                   effective={derived.effective}
                   cash={formState.cash}
                   cpf={formState.cpf}
+                  cit={formState.cit}
+                  marital={formState.marital}
                   rawCount={rawCount}
                   latestMonth={latestMonth}
                   mustAmenities={formState.mustAmenities}

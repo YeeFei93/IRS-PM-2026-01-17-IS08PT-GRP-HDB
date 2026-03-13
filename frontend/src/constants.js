@@ -53,3 +53,12 @@ export const AMENITIES = {
   'MARINE PARADE': { mrt: 'Marine Parade MRT', mrtMin: 6, hawker: 'Marine Parade FC', park: 'East Coast Park' },
   'BUANGKOK': { mrt: 'Buangkok MRT', mrtMin: 5, hawker: 'Buangkok Square FC', park: 'Sengkang Riverside' },
 };
+
+export const AMENITY_THRESHOLDS = {
+  mrt:      { dist: 500,  label: '≤500m' },
+  hawker:   { dist: 1000, label: '≤1km' },
+  school:   { dist: 1000, label: '≤1km' },
+  park:     { dist: 1000, label: '≤1km' },
+  mall:     { dist: 1500, label: '≤1.5km' },
+  hospital: { dist: 3000, label: '≤3km' },
+};

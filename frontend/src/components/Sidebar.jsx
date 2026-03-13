@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 function SidebarSection({ icon, title, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -110,11 +110,26 @@ const REGION_OPTIONS = [
 
 const AMENITY_OPTIONS = [
   { value: 'mrt', icon: '🚇', label: 'MRT ≤500m' },
-  { value: 'hawker', icon: '🍜', label: 'Hawker Ctr' },
-  { value: 'school', icon: '🏫', label: 'Pri School' },
+  { value: 'hawker', icon: '🍜', label: 'Hawker ≤1km' },
+  { value: 'school', icon: '🏫', label: 'Pri School ≤1km' },
   { value: 'park', icon: '🌳', label: 'Park ≤1km' },
-  { value: 'mall', icon: '🛍️', label: 'Mall' },
-  { value: 'clinic', icon: '🏥', label: 'Clinic' },
+  { value: 'mall', icon: '🛍️', label: 'Mall ≤1.5km' },
+  { value: 'hospital', icon: '🏥', label: 'Hospital ≤3km' },
+];
+
+const MARITAL_OPTIONS = [
+  { value: 'married', label: 'Married', groups: ['SC_SC', 'SC_PR', 'SC_NR', 'PR_PR'] },
+  { value: 'fiancee', label: 'Fiancé / Fiancée', groups: ['SC_SC', 'SC_PR', 'SC_NR'] },
+  { value: 'widowed', label: 'Widowed / Divorced', groups: ['SC_SC', 'SC_PR', 'PR_PR'] },
+  { value: 'single_scheme', label: 'Singapore Single Scheme', groups: ['SC_single'] },
+  { value: 'joint', label: 'Joint Singles Scheme (JSS)', groups: ['SC_single'] },
+  { value: 'with_parents', label: 'Single with Parents', groups: ['SC_single'] },
+];
+
+const FTIMER_OPTIONS = [
+  { value: 'first', label: 'First-Timer', groups: null },
+  { value: 'second', label: 'Second-Timer', groups: null },
+  { value: 'mixed', label: 'One First + One Second Timer', groups: ['SC_SC', 'SC_PR', 'PR_PR'] },
 ];
 
 export default function Sidebar({
@@ -129,6 +144,20 @@ export default function Sidebar({
 
   const set = (key) => (e) => onFormChange(key, e.target.value);
   const setNum = (key) => (e) => onFormChange(key, +e.target.value);
+
+  // Dynamic marital options filtered by citizenship
+  const visibleMarital = useMemo(() => MARITAL_OPTIONS.filter(opt => opt.groups.includes(cit)), [cit]);
+  const visibleFtimer = useMemo(() => FTIMER_OPTIONS.filter(opt => !opt.groups || opt.groups.includes(cit)), [cit]);
+
+  // Auto-reset marital/ftimer when citizenship changes and current selection is invalid
+  const maritalValid = visibleMarital.some(o => o.value === marital);
+  if (!maritalValid && visibleMarital.length > 0) {
+    onFormChange('marital', visibleMarital[0].value);
+  }
+  const ftimerValid = visibleFtimer.some(o => o.value === ftimer);
+  if (!ftimerValid && visibleFtimer.length > 0) {
+    onFormChange('ftimer', visibleFtimer[0].value);
+  }
 
   const toggleRegion = (val) => {
     const next = selRegions.includes(val)
@@ -152,7 +181,8 @@ export default function Sidebar({
           <select value={cit} onChange={set('cit')}>
             <option value="SC_SC">SC + SC (Couple / Family)</option>
             <option value="SC_PR">SC + SPR Couple</option>
-            <option value="SC_single">Singapore Citizen (Single, ≥35)</option>
+            <option value="SC_NR">SC + Non-Resident Spouse</option>
+            <option value="SC_single">SC Single (≥35)</option>
             <option value="PR_PR">PR + PR Couple</option>
           </select>
         </Field>
@@ -163,10 +193,9 @@ export default function Sidebar({
         </Field>
         <Field label="Marital / Family Status">
           <select value={marital} onChange={set('marital')}>
-            <option value="married">Married</option>
-            <option value="single">Single (Public Scheme)</option>
-            <option value="fiancee">Fiancé / Fiancée</option>
-            <option value="widowed">Widowed / Divorced</option>
+            {visibleMarital.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
           </select>
         </Field>
         <Field label="Monthly Household Income ($)">
@@ -176,9 +205,9 @@ export default function Sidebar({
         </Field>
         <Field label="First-Timer Status">
           <select value={ftimer} onChange={set('ftimer')}>
-            <option value="first">First-Timer (Both)</option>
-            <option value="second">Second-Timer</option>
-            <option value="mixed">One First + One Second Timer</option>
+            {visibleFtimer.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
           </select>
         </Field>
         <Field label="Living Near / With Parents?">
@@ -259,7 +288,7 @@ export default function Sidebar({
 
       {/* Amenity Priorities */}
       <SidebarSection icon="📍" title="Amenity Priorities">
-        <Field label={<>Must-Have Amenities <span className="text-muted text-[0.62rem] normal-case tracking-normal">(affects amenity score)</span></>}>
+        <Field label={<>Must-Have Amenities <span className="text-muted text-[0.62rem] normal-case tracking-normal">(threshold-filtered)</span></>}>
           <div className="grid grid-cols-2 gap-1.5">
             {AMENITY_OPTIONS.map(a => (
               <CheckItem
@@ -270,6 +299,10 @@ export default function Sidebar({
                 onClick={() => toggleAmenity(a.value)}
               />
             ))}
+          </div>
+          <div className="text-[0.61rem] text-muted mt-1.5 leading-relaxed">
+            Selected amenities are threshold-checked against real dataset distances.<br />
+            Towns that miss a must-have enter serendipity pool only.
           </div>
         </Field>
         <Field label="Max Walk to MRT (minutes)">

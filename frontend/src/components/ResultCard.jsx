@@ -66,20 +66,33 @@ export default function ResultCard({ rec, index, mustAmenities, isHighlighted, o
     : pd.conf === 'medium' ? 'text-orange bg-[rgba(230,126,34,0.1)]'
       : 'text-[#ff8080] bg-[rgba(192,57,43,0.1)]';
 
-  const scoreRows = [
-    { icon: '💰', label: 'Budget Fit', pts: sc.budget.pts, max: sc.budget.max, desc: sc.budget.desc },
-    { icon: '🚇', label: 'Transport Access', pts: sc.transport.pts, max: sc.transport.max, desc: sc.transport.desc },
-    { icon: '🗺️', label: 'Region Match', pts: sc.region.pts, max: sc.region.max, desc: sc.region.desc },
-    { icon: '🏠', label: 'Flat Attributes', pts: sc.flat.pts, max: sc.flat.max, desc: sc.flat.desc },
-  ];
+  const scoreRows = [];
+  if (sc.active?.includes('budget'))
+    scoreRows.push({ icon: '💰', label: `Budget Fit (${sc.weight?.toFixed(1)} pts)`, pts: sc.budget.pts, max: sc.weight || sc.budget.max, desc: sc.budget.desc });
+  if (sc.active?.includes('mrt'))
+    scoreRows.push({ icon: '🚇', label: `MRT Access (${sc.weight?.toFixed(1)} pts)`, pts: sc.transport.pts, max: sc.weight || sc.transport.max, desc: sc.transport.desc });
+  if (sc.active?.includes('region'))
+    scoreRows.push({ icon: '🗺️', label: `Region Match (${sc.weight?.toFixed(1)} pts)`, pts: sc.region.pts, max: sc.weight || sc.region.max, desc: sc.region.desc });
+  if (sc.active?.includes('flat'))
+    scoreRows.push({ icon: '🏠', label: `Flat Size (${sc.weight?.toFixed(1)} pts)`, pts: sc.flat.pts, max: sc.weight || sc.flat.max, desc: sc.flat.desc });
+  if (sc.active?.includes('lease'))
+    scoreRows.push({ icon: '📅', label: `Min Lease (${sc.weight?.toFixed(1)} pts)`, pts: sc.components?.lease?.pts || 0, max: sc.weight || 13.33, desc: 'Estimated remaining lease vs your minimum requirement' });
+  // Fallback: if no active criteria detected (old score shape), show all
+  if (!sc.active || scoreRows.length === 0) {
+    scoreRows.push(
+      { icon: '💰', label: 'Budget Fit', pts: sc.budget.pts, max: sc.budget.max, desc: sc.budget.desc },
+      { icon: '🚇', label: 'Transport Access', pts: sc.transport.pts, max: sc.transport.max, desc: sc.transport.desc },
+      { icon: '🗺️', label: 'Region Match', pts: sc.region.pts, max: sc.region.max, desc: sc.region.desc },
+      { icon: '🏠', label: 'Flat Attributes', pts: sc.flat.pts, max: sc.flat.max, desc: sc.flat.desc },
+    );
+  }
 
   const amenItems = [
     { key: 'mrt', icon: '🚇', label: 'MRT Station', d: sc.amenity.detail.mrt },
     { key: 'hawker', icon: '🍜', label: 'Hawker Centre', d: sc.amenity.detail.hawker },
     { key: 'park', icon: '🌳', label: 'Park', d: sc.amenity.detail.park },
     { key: 'school', icon: '🏫', label: 'Primary School', d: sc.amenity.detail.school },
-    { key: 'mall', icon: '🛍️', label: 'Shopping Mall', d: sc.amenity.detail.mall },
-    { key: 'clinic', icon: '🏥', label: 'Clinic', d: sc.amenity.detail.clinic },
+    { key: 'hospital', icon: '🏥', label: 'Hospital', d: sc.amenity.detail.hospital },
   ];
 
   const amenPtsCls = sc.amenity.pts >= 20 ? 'text-green' : sc.amenity.pts >= 12 ? 'text-gold' : 'text-orange';
@@ -98,7 +111,10 @@ export default function ResultCard({ rec, index, mustAmenities, isHighlighted, o
         </div>
         <div className="flex-1">
           <div className="font-serif text-[0.95rem] text-white">{town}</div>
-          <div className="text-[0.7rem] text-muted mt-0.5">{ftype} · HDB Resale · {pd.n} transactions</div>
+          <div className="text-[0.7rem] text-muted mt-0.5">
+            {ftype} · HDB Resale · {pd.n} transactions
+            {rec.failed_must?.length > 0 && <span className="text-orange"> · ⚠️ {rec.failed_must.length} threshold missed</span>}
+          </div>
         </div>
         <div className="text-right">
           <div className={`font-mono text-[1.2rem] font-semibold leading-none ${scCls}`}>{sc.total}</div>
@@ -112,17 +128,24 @@ export default function ResultCard({ rec, index, mustAmenities, isHighlighted, o
           <div className="h-full rounded-sm bg-gradient-to-r from-red to-gold bar-fill-transition" style={{ width: `${sc.total}%` }} />
         </div>
         <div className="flex gap-1 mt-1.5 flex-wrap">
-          {[
-            ['Budget', sc.budget.pts, 20],
-            ['Amenities', sc.amenity.pts, 30],
-            ['Transport', sc.transport.pts, 20],
-            ['Region', sc.region.pts, 15],
-            ['Flat', sc.flat.pts, 15],
-          ].map(([label, pts, max]) => (
-            <div key={label} className="text-[0.62rem] px-1.5 py-0.5 rounded bg-dk3 text-muted">
-              {label} <span className="text-light">{pts}/{max}</span>
-            </div>
-          ))}
+          <div className="text-[0.62rem] px-1.5 py-0.5 rounded bg-dk3 text-muted">
+            Budget <span className="text-light">{sc.budget.pts.toFixed?.(1) ?? sc.budget.pts}/{sc.budget.max.toFixed?.(1) ?? 20}</span>
+          </div>
+          <div className="text-[0.62rem] px-1.5 py-0.5 rounded bg-dk3 text-muted">
+            Amenities <span className="text-light">{sc.amenity.pts.toFixed?.(1) ?? sc.amenity.pts}/{sc.amenity.max.toFixed?.(1) ?? 30}</span>
+          </div>
+          <div className="text-[0.62rem] px-1.5 py-0.5 rounded bg-dk3 text-muted">
+            Transport <span className="text-light">{sc.transport.pts.toFixed?.(1) ?? sc.transport.pts}/{sc.transport.max.toFixed?.(1) ?? 20}</span>
+          </div>
+          <div className="text-[0.62rem] px-1.5 py-0.5 rounded bg-dk3 text-muted">
+            Region <span className="text-light">{sc.region.pts.toFixed?.(1) ?? sc.region.pts}/{sc.region.max.toFixed?.(1) ?? 15}</span>
+          </div>
+          <div className="text-[0.62rem] px-1.5 py-0.5 rounded bg-dk3 text-muted">
+            Flat <span className="text-light">{sc.flat.pts.toFixed?.(1) ?? sc.flat.pts}/{sc.flat.max.toFixed?.(1) ?? 15}</span>
+          </div>
+          {sc.serendipity && <div className="text-[0.62rem] px-1.5 py-0.5 rounded bg-dk3 text-muted border-l-2 border-[#9b59b6]">
+            Serendipity <span className="text-[#c39bd3]">{sc.serendipity.pts.toFixed(1)}/20</span>
+          </div>}
         </div>
       </div>
 
@@ -179,13 +202,13 @@ export default function ResultCard({ rec, index, mustAmenities, isHighlighted, o
             <div className="text-sm shrink-0 w-5 text-center">📍</div>
             <div className="flex-1">
               <div className="text-[0.74rem] text-light font-medium">
-                Amenity Score <span className="text-[0.62rem] text-muted font-normal">— {sc.amenity.pts}/30 pts total</span>
+                Amenity Score <span className="text-[0.62rem] text-muted font-normal">— {typeof sc.amenity.pts === 'number' ? sc.amenity.pts.toFixed(1) : sc.amenity.pts}/{typeof sc.weight === 'number' ? sc.weight.toFixed(1) : '30'} pts</span>
               </div>
               <div className="text-[0.67rem] text-muted">Breakdown of all nearby amenities and their contribution</div>
             </div>
             <div className="text-right shrink-0">
-              <div className={`font-mono text-[0.82rem] font-semibold ${amenPtsCls}`}>{sc.amenity.pts}</div>
-              <div className="text-[0.62rem] text-muted">/30</div>
+              <div className={`font-mono text-[0.82rem] font-semibold ${amenPtsCls}`}>{typeof sc.amenity.pts === 'number' ? sc.amenity.pts.toFixed(1) : sc.amenity.pts}</div>
+              <div className="text-[0.62rem] text-muted">/{typeof sc.weight === 'number' ? sc.weight.toFixed(1) : '30'}</div>
             </div>
           </div>
           {amenItems.map(ai => (

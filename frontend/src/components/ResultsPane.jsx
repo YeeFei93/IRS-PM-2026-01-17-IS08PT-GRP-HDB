@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import ResultCard from './ResultCard';
 
 const SORT_TABS = [
@@ -8,11 +8,37 @@ const SORT_TABS = [
   { key: 'psm', label: '📐 $/sqm' },
 ];
 
+function schemeLabels(cit, marital) {
+  let ehg = 'EHG', cpf = 'CPF Grant';
+  if (cit === 'SC_NR') {
+    ehg = 'EHG (Singles — ½ income)';
+    cpf = 'CPF Grant (Singles)';
+  } else if (cit === 'SC_single' && marital === 'joint') {
+    ehg = 'EHG (Joint Singles)';
+    cpf = 'CPF Grant (JSS)';
+  } else if (cit === 'SC_single' && marital === 'single_scheme') {
+    ehg = 'EHG (Singles)';
+    cpf = 'CPF Grant (Singles)';
+  } else if (cit === 'SC_single' && marital === 'with_parents') {
+    ehg = 'EHG (Singles — w/ Parents)';
+    cpf = 'CPF Grant (Singles)';
+  } else if (cit === 'SC_SC') {
+    ehg = 'EHG (Families)';
+    cpf = 'CPF Housing Grant (SC/SC)';
+  } else if (cit === 'SC_PR') {
+    ehg = 'EHG (Families)';
+    cpf = 'CPF Housing Grant (SC/PR)';
+  }
+  return { ehg, cpf };
+}
+
 export default function ResultsPane({
-  recs, grants, effective, cash, cpf, rawCount, latestMonth, mustAmenities,
+  recs, grants, effective, cash, cpf, cit, marital, rawCount, latestMonth, mustAmenities,
   highlightedTown, onCardClick, onJumpMap,
 }) {
   const [sortKey, setSortKey] = useState('score');
+  const labels = useMemo(() => schemeLabels(cit, marital), [cit, marital]);
+  const activeCriteriaCount = recs[0]?.sc?.active?.length || 0;
 
   const sorted = [...recs];
   if (sortKey === 'score') sorted.sort((a, b) => b.sc.total - a.sc.total);
@@ -57,7 +83,7 @@ export default function ResultsPane({
           <div>
             <div className="font-serif text-[1.25rem] text-white">Top {recs.length} Recommendations</div>
             <div className="text-[0.74rem] text-muted mt-0.5">
-              {rawCount.toLocaleString()} transactions · {latestMonth || '—'} · data.gov.sg
+              {rawCount.toLocaleString()} transactions · {latestMonth || '—'} · {activeCriteriaCount} active criteria · data.gov.sg
             </div>
           </div>
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[rgba(22,160,133,0.1)] border border-[rgba(22,160,133,0.25)] text-teal text-[0.65rem] font-mono">
@@ -75,14 +101,14 @@ export default function ResultsPane({
           {grants.ehg > 0 && <>
             <div className="w-px h-8 bg-dk4" />
             <div className="text-center">
-              <div className="text-[0.62rem] text-muted uppercase tracking-[1px]">EHG Grant</div>
+              <div className="text-[0.62rem] text-muted uppercase tracking-[1px]">{labels.ehg}</div>
               <div className="font-mono text-[0.9rem] text-green font-semibold">${grants.ehg.toLocaleString()}</div>
             </div>
           </>}
           {grants.cpfG > 0 && <>
             <div className="w-px h-8 bg-dk4" />
             <div className="text-center">
-              <div className="text-[0.62rem] text-muted uppercase tracking-[1px]">CPF Grant</div>
+              <div className="text-[0.62rem] text-muted uppercase tracking-[1px]">{labels.cpf}</div>
               <div className="font-mono text-[0.9rem] text-green font-semibold">${grants.cpfG.toLocaleString()}</div>
             </div>
           </>}
